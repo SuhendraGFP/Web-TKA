@@ -185,6 +185,8 @@ async function handleLogout() {
   if (activityInterval) clearInterval(activityInterval);
   stopCameraStream();
   stopExamTimer();
+  // Clear seen-message cache for this user so switching accounts is clean
+  // (we keep it if they re-login with the same account — that's fine)
   await signOut(auth);
 }
 
@@ -1036,39 +1038,62 @@ async function closeResult() {
 
 // ============================================================
 //  MESSAGES
+//
+//  Strategy: track "seen" message IDs in localStorage per user,
+//  keyed by uid. This avoids:
+//    - updating Firestore on read → re-triggering snapshot → infinite loop
+//    - broadcast (toUser:"all") messages being "read" for one user
+//      but still unread for another (shared doc problem)
 // ============================================================
+
+function _seenKey() {
+  return "seen-msgs-" + (currentUser?.uid || "anon");
+}
+
+function _getSeenIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(_seenKey()) || "[]")); }
+  catch { return new Set(); }
+}
+
+function _addSeenId(msgId) {
+  const ids = _getSeenIds();
+  ids.add(msgId);
+  // Keep only last 200 to avoid unbounded growth
+  const arr = [...ids].slice(-200);
+  try { localStorage.setItem(_seenKey(), JSON.stringify(arr)); } catch {}
+}
+
 function listenMessages() {
   if (!currentUser) return;
-  // No orderBy here — avoids needing a composite Firestore index.
-  // Sort client-side instead.
   const q = query(
     collection(db, "messages"),
     where("toUser", "in", [currentUser.uid, "all"])
   );
   messagesUnsub = onSnapshot(q, snap => {
-    const msgs = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => {
-        const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-        const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-        return tb - ta; // newest first
-      });
-    const unread = msgs.filter(m => !m.read);
-    // Bell badge
-    document.getElementById("bell-badge").classList.toggle("show", unread.length > 0);
-    // Show latest unread as banner
-    if (unread.length > 0) {
-      const latest = unread[0];
-      document.getElementById("admin-banner-text").textContent = latest.text;
+    const seen = _getSeenIds();
+
+    // Only react to genuinely NEW (added) documents that haven't been seen
+    snap.docChanges().forEach(change => {
+      if (change.type !== "added") return;
+      const msg = { id: change.doc.id, ...change.doc.data() };
+      if (seen.has(msg.id)) return; // already shown to this user
+
+      // Mark as seen locally (no Firestore write → no loop)
+      _addSeenId(msg.id);
+
+      // Show banner
+      document.getElementById("admin-banner-text").textContent = msg.text;
       document.getElementById("admin-banner").classList.add("show");
-      // Mark as read
-      markMessageRead(latest.id);
-    }
+
+      // Show bell badge
+      document.getElementById("bell-badge").classList.add("show");
+    });
   }, err => console.error("Messages listener:", err));
 }
 
+// markMessageRead kept for compatibility but now just records locally
 async function markMessageRead(msgId) {
-  try { await updateDoc(doc(db, "messages", msgId), { read: true }); } catch(e){}
+  _addSeenId(msgId);
 }
 
 function closeBanner() {
@@ -1105,6 +1130,9 @@ async function openMessages() {
       </div>`;
     }).join("");
   }
+  // Mark all currently loaded messages as seen
+  msgs.forEach(m => _addSeenId(m.id));
+
   document.getElementById("messages-modal").classList.add("show");
   document.getElementById("bell-badge").classList.remove("show");
 }
