@@ -39,26 +39,36 @@ let adminPackChart  = null;
 
 // ── Expose globals ─────────────────────────────────────────
 // Expose immediately (before DOMContentLoaded) so onclick= attributes work
-window.handleAdminLogin   = handleAdminLogin;
-window.handleAdminLogout  = handleAdminLogout;
-window.adminNavigate      = adminNavigate;
-window.handleJsonUpload   = handleJsonUpload;
-window.savePack           = savePack;
-window.cancelUpload       = cancelUpload;
-window.deletePack         = deletePack;
-window.sendMessage        = sendMessage;
-window.useTemplate        = useTemplate;
-window.filterUsers        = filterUsers;
-window.closeModal         = closeModal;
-window.sendPhotoRequest   = sendPhotoRequest;
-window.loadPhotoGallery   = loadPhotoGallery;
-window.downloadPhoto      = downloadPhoto;
-window.deletePhoto        = deletePhoto;
+window.handleAdminLogin      = handleAdminLogin;
+window.handleAdminLogout     = handleAdminLogout;
+window.adminNavigate         = adminNavigate;
+window.handleJsonUpload      = handleJsonUpload;
+window.savePack              = savePack;
+window.cancelUpload          = cancelUpload;
+window.deletePack            = deletePack;
+window.sendMessage           = sendMessage;
+window.useTemplate           = useTemplate;
+window.filterUsers           = filterUsers;
+window.closeModal            = closeModal;
+window.sendPhotoRequest      = sendPhotoRequest;
+window.loadPhotoGallery      = loadPhotoGallery;
+window.downloadPhoto         = downloadPhoto;
+window.deletePhoto           = deletePhoto;
+window.deleteUser            = deleteUser;
+window.deleteUserHistory     = deleteUserHistory;
+window.toggleAdminDarkMode   = toggleAdminDarkMode;
 
 // ============================================================
 //  INIT
 // ============================================================
 document.addEventListener("DOMContentLoaded", () => {
+  // Restore admin dark mode preference
+  if (localStorage.getItem("admin-theme") === "dark") {
+    document.body.classList.add("dark");
+    const btn = document.getElementById("admin-dark-toggle");
+    if (btn) btn.textContent = "☀️";
+  }
+
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       try {
@@ -117,14 +127,10 @@ async function initAdminApp() {
   document.getElementById("admin-nav-name").textContent =
     adminUser._displayName.split(" ")[0];
 
-  await loadAllData();
+  await Promise.all([loadAllData()]);
   renderOverview();
-  // listenUsers() will call populateRecipientSelect + populatePhotoRecipientSelect
-  // once the snapshot fires (or falls back). Also populate immediately with
-  // whatever loadAllData got, so the dropdowns aren't empty on first render.
-  populateRecipientSelect();
-  populatePhotoRecipientSelect();
   listenUsers();
+  populateRecipientSelect();
   loadMessageLog();
 }
 
@@ -167,46 +173,17 @@ async function handleAdminLogout() {
 //  LOAD DATA
 // ============================================================
 async function loadAllData() {
-  // Load packs & sessions
   try {
-    const packsSnap = await getDocs(collection(db, "questionPacks"));
-    allPacks = packsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch (e) { console.error("Load packs:", e); }
-
-  try {
-    let sessionsSnap;
-    try {
-      sessionsSnap = await getDocs(query(collection(db, "sessions"), orderBy("completedAt", "desc"), limit(200)));
-    } catch (_) {
-      sessionsSnap = await getDocs(collection(db, "sessions"));
-    }
-    allSessions = sessionsSnap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(s => s.status === "completed")
-      .sort((a, b) => {
-        const ta = a.completedAt?.toDate ? a.completedAt.toDate() : new Date(a.completedAt || 0);
-        const tb = b.completedAt?.toDate ? b.completedAt.toDate() : new Date(b.completedAt || 0);
-        return tb - ta;
-      });
-  } catch (e) { console.error("Load sessions:", e); }
-
-  // Load users — try role-filtered query first, fall back to full collection
-  try {
-    const usersSnap = await getDocs(
-      query(collection(db, "users"), where("role", "==", "user"))
-    );
-    allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const [usersSnap, packsSnap, sessionsSnap] = await Promise.all([
+      getDocs(query(collection(db, "users"), where("role", "==", "user"))),
+      getDocs(collection(db, "questionPacks")),
+      getDocs(query(collection(db, "sessions"), orderBy("completedAt", "desc"), limit(200)))
+    ]);
+    allUsers    = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allPacks    = packsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allSessions = sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.status === "completed");
   } catch (e) {
-    console.warn("users role-filter query failed, trying full collection:", e.message);
-    try {
-      const usersSnap = await getDocs(collection(db, "users"));
-      allUsers = usersSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(u => u.role !== "admin" && u.id !== adminUser?.uid);
-    } catch (e2) {
-      console.error("Load users fallback failed:", e2);
-      allUsers = [];
-    }
+    console.error("Load data:", e);
   }
 }
 
@@ -450,46 +427,21 @@ function deletePack(packId, packTitle) {
 // ============================================================
 function listenUsers() {
   if (usersUnsub) usersUnsub();
-
-  // Try realtime listener with role filter; if it fails (rules), poll manually
-  let listenerFailed = false;
-
-  const q = query(collection(db, "users"), where("role", "==", "user"));
   usersUnsub = onSnapshot(
-    q,
+    query(collection(db, "users"), where("role", "==", "user")),
     snap => {
-      listenerFailed = false;
       allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      _onUsersUpdated();
+      renderUserMonitor(allUsers);
+      document.getElementById("ov-total-users").textContent = allUsers.length;
+      const activeCount = allUsers.filter(u => {
+        if (!u.lastSeen) return false;
+        const d = u.lastSeen.toDate ? u.lastSeen.toDate() : new Date(u.lastSeen);
+        return (Date.now() - d.getTime()) < 2 * 60 * 1000;
+      }).length;
+      document.getElementById("ov-active-users").textContent = activeCount;
     },
-    async err => {
-      console.warn("Users snapshot failed (likely rules), falling back to polling:", err.message);
-      listenerFailed = true;
-      // One-time fallback load
-      try {
-        const fullSnap = await getDocs(collection(db, "users"));
-        allUsers = fullSnap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(u => u.role !== "admin" && u.id !== adminUser?.uid);
-        _onUsersUpdated();
-      } catch (e2) {
-        console.error("Users fallback poll also failed:", e2);
-      }
-    }
+    err => console.error("Users listener:", err)
   );
-}
-
-function _onUsersUpdated() {
-  renderUserMonitor(allUsers);
-  populateRecipientSelect();
-  populatePhotoRecipientSelect();
-  document.getElementById("ov-total-users").textContent = allUsers.length;
-  const activeCount = allUsers.filter(u => {
-    if (!u.lastSeen) return false;
-    const d = u.lastSeen.toDate ? u.lastSeen.toDate() : new Date(u.lastSeen);
-    return (Date.now() - d.getTime()) < 2 * 60 * 1000;
-  }).length;
-  document.getElementById("ov-active-users").textContent = activeCount;
 }
 
 function filterUsers(filter, btn) {
@@ -547,17 +499,36 @@ function renderUserMonitor(users) {
         ? `<div class="user-monitor-activity">&#9201; ${escHtml(u.currentActivity)}</div>`
         : `<div class="user-monitor-activity" style="color:var(--neutral-300)">Tidak ada aktivitas aktif &middot; Terakhir: ${lastSeen}</div>`
       }
-      <div class="user-monitor-action">
+      <div class="user-monitor-action" style="flex-wrap:wrap;gap:6px;">
         <button class="btn btn-outline btn-sm" onclick="openSendTo('${u.id}', '${escHtml(u.displayName||"Siswa").replace(/'/g,"\\'")}')">
-          Kirim Pesan
+          💬 Pesan
         </button>
         <button class="btn btn-ghost btn-sm" onclick="viewUserHistory('${u.id}')">
-          Lihat Histori
+          📋 Histori
+        </button>
+        <button class="btn btn-outline btn-sm" style="color:var(--error);border-color:var(--error);"
+          onclick="deleteUserHistory('${u.id}', '${escHtml(u.displayName||"Siswa").replace(/'/g,"\\'")}')">
+          🗑️ Hapus Histori
+        </button>
+        <button class="btn btn-danger btn-sm"
+          onclick="deleteUser('${u.id}', '${escHtml(u.displayName||"Siswa").replace(/'/g,"\\'")}')">
+          ✕ Hapus Akun
         </button>
       </div>
     </div>`;
   }).join("");
 }
+
+window.filterUsersBySearch = function(query) {
+  const q = query.toLowerCase().trim();
+  const filtered = q
+    ? allUsers.filter(u =>
+        (u.displayName || "").toLowerCase().includes(q) ||
+        (u.email || "").toLowerCase().includes(q)
+      )
+    : allUsers;
+  renderUserMonitor(filtered);
+};
 
 window.openSendTo = function(userId, userName) {
   adminNavigate("messages");
@@ -920,6 +891,65 @@ async function deletePhoto(photoId) {
       showToast("Gagal hapus: " + e.message, "error");
     }
   });
+}
+
+// ============================================================
+//  DELETE USER & HISTORY
+// ============================================================
+async function deleteUser(userId, userName) {
+  showModal(
+    "Hapus Akun Siswa",
+    `Yakin ingin menghapus akun "${userName}"? Semua data sesi dan foto terkait TIDAK otomatis terhapus — hapus manual dari Firestore jika perlu.`,
+    async () => {
+      try {
+        // Delete Firestore user doc
+        await deleteDoc(doc(db, "users", userId));
+        // Remove from local state
+        allUsers = allUsers.filter(u => u.id !== userId);
+        _onUsersUpdated();
+        showToast(`Akun "${userName}" dihapus dari Firestore.`, "success");
+        // Note: Firebase Auth account deletion requires Admin SDK / re-auth.
+        // Show reminder to admin.
+        setTimeout(() => showToast("Catatan: akun Auth Firebase harus dihapus manual di Firebase Console → Authentication.", "info"), 1500);
+      } catch (e) {
+        showToast("Gagal hapus akun: " + e.message, "error");
+      }
+    }
+  );
+}
+
+async function deleteUserHistory(userId, userName) {
+  showModal(
+    "Hapus Histori Latihan",
+    `Yakin ingin menghapus SEMUA histori sesi latihan "${userName}"? Tindakan ini tidak bisa dibatalkan.`,
+    async () => {
+      try {
+        const q = query(collection(db, "sessions"), where("userId", "==", userId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const delPromises = snap.docs.map(d => deleteDoc(d.ref));
+          await Promise.all(delPromises);
+          // Refresh local sessions
+          allSessions = allSessions.filter(s => s.userId !== userId);
+          showToast(`${snap.size} sesi "${userName}" berhasil dihapus.`, "success");
+        } else {
+          showToast("Tidak ada sesi untuk dihapus.", "info");
+        }
+      } catch (e) {
+        showToast("Gagal hapus histori: " + e.message, "error");
+      }
+    }
+  );
+}
+
+// ============================================================
+//  DARK MODE (ADMIN)
+// ============================================================
+function toggleAdminDarkMode() {
+  const isDark = document.body.classList.toggle("dark");
+  localStorage.setItem("admin-theme", isDark ? "dark" : "light");
+  const btn = document.getElementById("admin-dark-toggle");
+  if (btn) btn.textContent = isDark ? "☀️" : "🌙";
 }
 
 // ============================================================
