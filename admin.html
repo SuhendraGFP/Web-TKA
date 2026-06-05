@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TKA Prep — Admin Panel</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script type="module" src="admin.js"></script>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading-screen">
+  <div class="loading-logo">TKA<span style="font-style:italic;color:var(--pink-400)">Prep</span> <span style="font-size:1rem;color:var(--neutral-400)">Admin</span></div>
+  <div class="loading-dots"><span></span><span></span><span></span></div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ================================================================
+     ADMIN AUTH (reuse user auth page style)
+     ================================================================ -->
+<div id="admin-auth-page" style="display:none;">
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="auth-brand-logo">TKA<br><span>Admin.</span></div>
+      <p class="auth-brand-sub">Panel administrasi untuk mengelola soal, memantau siswa, dan memberikan dukungan.</p>
+      <div class="auth-features">
+        <div class="auth-feature-item">
+          <div class="auth-feature-icon">&#128196;</div>
+          <span class="auth-feature-text">Upload dan kelola paket soal</span>
+        </div>
+        <div class="auth-feature-item">
+          <div class="auth-feature-icon">&#128065;</div>
+          <span class="auth-feature-text">Pantau aktivitas siswa secara real-time</span>
+        </div>
+        <div class="auth-feature-item">
+          <div class="auth-feature-icon">&#128140;</div>
+          <span class="auth-feature-text">Kirim pesan semangat personal</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="auth-right">
+    <div class="auth-form-container">
+      <h1 class="auth-form-title">Admin Login</h1>
+      <p class="auth-form-subtitle">Masuk dengan akun admin kamu.</p>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-control" id="admin-email" type="email" placeholder="admin@email.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kata Sandi</label>
+        <input class="form-control" id="admin-password" type="password" placeholder="••••••••" />
+        <div class="form-error" id="admin-login-error"></div>
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" id="btn-admin-login" onclick="handleAdminLogin()">
+        Masuk sebagai Admin
+      </button>
+      <p style="font-size:.8rem;color:var(--neutral-400);margin-top:16px;text-align:center;">
+        Bukan admin? <a href="index.html" style="color:var(--pink-500);font-weight:600;">Kembali ke halaman siswa</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     ADMIN APP
+     ================================================================ -->
+<div id="admin-app" style="display:none;flex-direction:column;min-height:100vh;">
+
+  <!-- Admin Nav -->
+  <nav class="admin-nav">
+    <div class="admin-nav-logo">TKA<span>Prep</span> Admin</div>
+    <div class="admin-nav-user">
+      <span id="admin-nav-name">Admin</span>
+      <span class="admin-nav-badge">ADMIN</span>
+      <button class="btn btn-ghost btn-sm" style="color:rgba(255,255,255,.5);" onclick="handleAdminLogout()">Keluar</button>
+    </div>
+  </nav>
+
+  <div class="admin-layout" style="flex:1;">
+
+    <!-- Sidebar -->
+    <div class="admin-sidebar">
+      <div class="admin-sidebar-item active" id="asb-overview" onclick="adminNavigate('overview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Overview
+      </div>
+      <div class="admin-sidebar-item" id="asb-packs" onclick="adminNavigate('packs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        Paket Soal
+      </div>
+      <div class="admin-sidebar-item" id="asb-monitor" onclick="adminNavigate('monitor')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Monitor Siswa
+      </div>
+      <div class="admin-sidebar-item" id="asb-messages" onclick="adminNavigate('messages')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Kirim Pesan
+      </div>
+      <div class="admin-sidebar-item" id="asb-stats" onclick="adminNavigate('stats')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Statistik
+      </div>
+      <div class="admin-sidebar-item" id="asb-photos" onclick="adminNavigate('photos')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        📸 Foto Siswa
+      </div>
+    </div>
+
+    <!-- Admin Content -->
+    <div class="admin-content">
+
+      <!-- ── OVERVIEW ── -->
+      <div class="admin-view active" id="aview-overview">
+        <div class="admin-view-title">Overview</div>
+        <div class="admin-view-subtitle">Ringkasan aktivitas platform hari ini</div>
+
+        <div class="admin-stats">
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="ov-total-users">–</div>
+            <div class="admin-stat-label">Total Siswa</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="ov-active-users">–</div>
+            <div class="admin-stat-label">Aktif Sekarang</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="ov-total-packs">–</div>
+            <div class="admin-stat-label">Paket Soal</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="ov-total-sessions">–</div>
+            <div class="admin-stat-label">Total Sesi</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-value" id="ov-avg-score">–</div>
+            <div class="admin-stat-label">Rata-rata Skor</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <div class="card">
+            <div class="section-title">Sesi per Mode</div>
+            <div style="height:200px;display:flex;align-items:center;justify-content:center;">
+              <canvas id="admin-mode-chart"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="section-title">Tren Skor (7 hari)</div>
+            <div style="height:200px;">
+              <canvas id="admin-trend-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Aktivitas Terkini</div>
+          <div id="ov-recent-activity" style="display:flex;flex-direction:column;gap:8px;">
+            <div class="empty-state" style="padding:24px;"><div class="empty-state-sub">Memuat data...</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PACKS ── -->
+      <div class="admin-view" id="aview-packs">
+        <div class="admin-view-title">Paket Soal</div>
+        <div class="admin-view-subtitle">Upload dan kelola paket soal untuk siswa</div>
+
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('json-file-input').click()">
+          <div class="upload-icon">&#128228;</div>
+          <div class="upload-label">Klik atau drag &amp; drop file JSON soal</div>
+          <div class="upload-sub">Format: array JSON sesuai struktur TKA (lihat dokumentasi)</div>
+        </div>
+        <input type="file" id="json-file-input" accept=".json" onchange="handleJsonUpload(event)" />
+
+        <!-- Pack Config Form (shown after upload) -->
+        <div class="pack-config-form" id="pack-config-form">
+          <div class="section-title" style="margin-bottom:20px;">Konfigurasi Paket Soal</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nama Paket</label>
+              <input class="form-control" id="pack-title" type="text" placeholder="cth. TKA Matematika — Sesi 1" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Mata Pelajaran</label>
+              <input class="form-control" id="pack-subject" type="text" placeholder="cth. TKA" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Kategori</label>
+              <input class="form-control" id="pack-category" type="text" placeholder="cth. Matematika" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Durasi (menit, kosongkan = tanpa batas)</label>
+              <input class="form-control" id="pack-duration" type="number" min="1" placeholder="cth. 90" />
+            </div>
+          </div>
+          <div id="upload-preview" style="margin:14px 0;font-size:.85rem;color:var(--neutral-500);"></div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-primary" onclick="savePack()">Simpan Paket</button>
+            <button class="btn btn-outline" onclick="cancelUpload()">Batal</button>
+          </div>
+        </div>
+
+        <!-- Packs Table -->
+        <div class="card" style="overflow-x:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div class="section-title" style="margin-bottom:0;">Daftar Paket</div>
+          </div>
+          <table class="packs-table" id="packs-table">
+            <thead>
+              <tr>
+                <th>Nama Paket</th>
+                <th>Mata Pelajaran</th>
+                <th>Soal</th>
+                <th>Durasi</th>
+                <th>Dibuat</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="packs-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--neutral-400);padding:24px;">Memuat data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── MONITOR ── -->
+      <div class="admin-view" id="aview-monitor">
+        <div class="admin-view-title">Monitor Siswa</div>
+        <div class="admin-view-subtitle">Pantau aktivitas siswa secara real-time</div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          <button class="filter-pill active" onclick="filterUsers('all', this)">Semua</button>
+          <button class="filter-pill" onclick="filterUsers('active', this)">Sedang Ujian</button>
+          <button class="filter-pill" onclick="filterUsers('online', this)">Online</button>
+          <button class="filter-pill" onclick="filterUsers('offline', this)">Offline</button>
+        </div>
+
+        <div class="user-monitor-list" id="user-monitor-list">
+          <div class="empty-state"><div class="empty-state-sub">Memuat data siswa...</div></div>
+        </div>
+      </div>
+
+      <!-- ── MESSAGES ── -->
+      <div class="admin-view" id="aview-messages">
+        <div class="admin-view-title">Kirim Pesan</div>
+        <div class="admin-view-subtitle">Kirim semangat atau pengumuman kepada siswa</div>
+
+        <div class="message-composer">
+          <div class="section-title">Tulis Pesan</div>
+
+          <div class="form-group">
+            <label class="form-label">Kepada</label>
+            <select class="form-control" id="msg-recipient">
+              <option value="all">Semua Siswa (Broadcast)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pilih Template Cepat</label>
+            <div class="message-quick-picks">
+              <button class="quick-pick-btn" onclick="useTemplate('Semangat terus belajarnya! Kamu pasti bisa!')">Semangat belajar</button>
+              <button class="quick-pick-btn" onclick="useTemplate('Jangan lupa istirahat yang cukup ya, kesehatan itu penting!')">Ingatkan istirahat</button>
+              <button class="quick-pick-btn" onclick="useTemplate('Sudah ada paket soal baru nih, yuk dicoba!')">Ada soal baru</button>
+              <button class="quick-pick-btn" onclick="useTemplate('Mantap banget progresnya! Terus pertahankan.')">Apresiasi progres</button>
+              <button class="quick-pick-btn" onclick="useTemplate('Jangan lupa latihan rutin setiap hari ya!')">Pengingat latihan</button>
+              <button class="quick-pick-btn" onclick="useTemplate('Simulasi besok ya, semangat persiapannya!')">Reminder simulasi</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Isi Pesan</label>
+            <textarea class="form-control" id="msg-text" rows="4"
+              placeholder="Tulis pesan kamu di sini..."></textarea>
+          </div>
+
+          <button class="btn btn-primary" onclick="sendMessage()">
+            Kirim Pesan
+          </button>
+        </div>
+
+        <!-- Message Log -->
+        <div class="card">
+          <div class="section-title">Riwayat Pesan</div>
+          <div id="msg-log" style="display:flex;flex-direction:column;gap:10px;max-height:400px;overflow-y:auto;">
+            <div class="empty-state" style="padding:16px;"><div class="empty-state-sub">Belum ada pesan terkirim</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STATS ── -->
+      <div class="admin-view" id="aview-stats">
+        <div class="admin-view-title">Statistik Platform</div>
+        <div class="admin-view-subtitle">Analisis performa dan penggunaan platform</div>
+
+        <div class="chart-card" style="margin-bottom:16px;">
+          <div class="chart-card-header">
+            <div class="chart-card-title">Distribusi Skor Semua Siswa</div>
+          </div>
+          <div style="height:240px;">
+            <canvas id="admin-score-dist-chart"></canvas>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div class="chart-card-title">Sesi per Hari (30 hari)</div>
+            </div>
+            <div style="height:200px;">
+              <canvas id="admin-daily-chart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div class="chart-card-title">Top Paket Soal</div>
+            </div>
+            <div style="height:200px;">
+              <canvas id="admin-pack-chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── PHOTOS ── -->
+      <div class="admin-view" id="aview-photos">
+        <div class="admin-view-title">📸 Foto Siswa</div>
+        <div class="admin-view-subtitle">Kirim permintaan foto ke siswa dan lihat hasilnya di sini</div>
+
+        <!-- Request section -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-title" style="margin-bottom:14px;">Kirim Permintaan Foto</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0;">
+              <label class="form-label">Kepada</label>
+              <select class="form-control" id="photo-req-recipient">
+                <option value="all">Semua Siswa</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;min-width:200px;margin-bottom:0;">
+              <label class="form-label">Pesan (opsional)</label>
+              <input class="form-control" id="photo-req-msg" type="text" placeholder="cth. Haii say, senyum dong! 📸" />
+            </div>
+            <button class="btn btn-primary" onclick="sendPhotoRequest()" style="flex-shrink:0;">
+              📸 Minta Foto
+            </button>
+          </div>
+        </div>
+
+        <!-- Photo gallery -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div class="section-title" style="margin-bottom:0;">Galeri Foto</div>
+            <button class="btn btn-outline btn-sm" onclick="loadPhotoGallery()">🔄 Refresh</button>
+          </div>
+          <div id="photo-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+            <div class="empty-state" style="grid-column:1/-1;padding:40px;">
+              <div class="empty-state-sub">Belum ada foto masuk. Kirim permintaan ke siswa dulu!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /admin-content -->
+  </div><!-- /admin-layout -->
+</div><!-- /admin-app -->
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Konfirmasi</div>
+    <div class="modal-body"  id="modal-body">Apakah kamu yakin?</div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Batal</button>
+      <button class="btn btn-danger"  id="modal-confirm-btn">Hapus</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

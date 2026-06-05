@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TKA Prep — Latihan & Simulasi UTBK</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- KaTeX for math rendering -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/contrib/auto-render.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <!-- Firebase v10 -->
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="loading-screen">
+  <div class="loading-logo">TKA<span style="font-style:italic;color:var(--pink-400)">Prep</span></div>
+  <div class="loading-dots">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ================================================================
+     AUTH PAGE
+     ================================================================ -->
+<div id="auth-page">
+  <div class="auth-left">
+    <div class="auth-brand">
+      <div class="auth-brand-logo">TKA<br><span>Prep.</span></div>
+      <p class="auth-brand-sub">
+        Platform latihan soal TKA/UTBK dengan simulasi ujian lengkap,
+        analisis performa mendalam, dan pendampingan dari admin.
+      </p>
+      <div class="auth-features">
+        <div class="auth-feature-item">
+          <div class="auth-feature-icon">&#9881;</div>
+          <span class="auth-feature-text">Tiga mode belajar: Simulasi, Latihan &amp; Custom</span>
+        </div>
+        <div class="auth-feature-item">
+          <div class="auth-feature-icon">&#128200;</div>
+          <span class="auth-feature-text">Grafik progres dan histori pengerjaan lengkap</span>
+        </div>
+        <div class="auth-feature-item">
+          <div class="auth-feature-icon">&#128140;</div>
+          <span class="auth-feature-text">Pesan semangat langsung dari admin</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-right">
+    <div class="auth-form-container">
+      <h1 class="auth-form-title">Selamat datang</h1>
+      <p class="auth-form-subtitle">Masuk atau daftar untuk mulai belajar.</p>
+
+      <div class="tab-switcher">
+        <button class="tab-btn active" id="tab-login" onclick="switchAuthTab('login')">Masuk</button>
+        <button class="tab-btn" id="tab-register" onclick="switchAuthTab('register')">Daftar</button>
+      </div>
+
+      <!-- Login Form -->
+      <div id="form-login">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email</label>
+          <input class="form-control" id="login-email" type="email" placeholder="nama@email.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Kata Sandi</label>
+          <input class="form-control" id="login-password" type="password" placeholder="••••••••" />
+          <div class="form-error" id="login-error"></div>
+        </div>
+        <button class="btn btn-primary btn-block btn-lg" id="btn-login" onclick="handleLogin()">
+          Masuk
+        </button>
+      </div>
+
+      <!-- Register Form -->
+      <div id="form-register" style="display:none;">
+        <div class="form-group">
+          <label class="form-label" for="reg-name">Nama Lengkap</label>
+          <input class="form-control" id="reg-name" type="text" placeholder="Nama kamu" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-email">Email</label>
+          <input class="form-control" id="reg-email" type="email" placeholder="nama@email.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-password">Kata Sandi</label>
+          <input class="form-control" id="reg-password" type="password" placeholder="Min. 6 karakter" />
+          <div class="form-error" id="reg-error"></div>
+        </div>
+        <button class="btn btn-primary btn-block btn-lg" id="btn-register" onclick="handleRegister()">
+          Buat Akun
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     APP PAGE (main user interface)
+     ================================================================ -->
+<div id="app-page">
+
+  <!-- Top Nav -->
+  <nav class="top-nav">
+    <div class="nav-logo">TKA<span>Prep</span></div>
+    <button class="nav-bell-btn" onclick="openMessages()" title="Pesan dari admin">
+      &#128276;
+      <span class="bell-badge" id="bell-badge"></span>
+    </button>
+    <button class="dark-toggle" id="dark-toggle" onclick="toggleDarkMode()" title="Ganti tema">🌙</button>
+    <div class="nav-user">
+      <div class="nav-avatar" id="nav-avatar">A</div>
+      <span id="nav-username">User</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="handleLogout()">Keluar</button>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="main-content">
+
+    <!-- Admin Message Banner -->
+    <div class="admin-message-banner" id="admin-banner">
+      <div class="admin-message-icon">&#128140;</div>
+      <div class="admin-message-body">
+        <div class="admin-message-from">Pesan dari Admin</div>
+        <div class="admin-message-text" id="admin-banner-text"></div>
+      </div>
+      <button class="admin-message-close" onclick="closeBanner()">&#10005;</button>
+    </div>
+
+    <!-- ── DASHBOARD VIEW ── -->
+    <div class="view active" id="view-dashboard">
+      <p class="dashboard-greeting">Halo, <span id="greeting-name">Kamu</span></p>
+      <p class="dashboard-date" id="greeting-date"></p>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-card-icon pink">&#128196;</div>
+          <div class="stat-card-value" id="stat-total">0</div>
+          <div class="stat-card-label">Total Sesi</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-icon green">&#11088;</div>
+          <div class="stat-card-value" id="stat-avg">–</div>
+          <div class="stat-card-label">Rata-rata Skor</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-icon rose">&#128293;</div>
+          <div class="stat-card-value" id="stat-best">–</div>
+          <div class="stat-card-label">Skor Terbaik</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-icon blue">&#9193;</div>
+          <div class="stat-card-value" id="stat-streak">0</div>
+          <div class="stat-card-label">Hari Beruntun</div>
+        </div>
+      </div>
+
+      <!-- Mode Cards -->
+      <div class="section-title">Pilih Mode Belajar</div>
+      <div class="mode-cards">
+        <div class="mode-card" onclick="goToMode('simulasi')">
+          <div class="mode-card-badge">&#9201; Terbatas Waktu</div>
+          <div class="mode-card-title">Simulasi Penuh</div>
+          <div class="mode-card-desc">Kondisi ujian nyata dengan timer ketat. Jawaban tidak langsung ditampilkan sebelum selesai.</div>
+          <div class="mode-card-arrow">&#8594;</div>
+        </div>
+        <div class="mode-card" onclick="goToMode('latihan')">
+          <div class="mode-card-badge">&#128161; Dengan Feedback</div>
+          <div class="mode-card-title">Mode Latihan</div>
+          <div class="mode-card-desc">Jawaban langsung ditampilkan setiap menjawab. Cocok untuk belajar dan memahami materi.</div>
+          <div class="mode-card-arrow">&#8594;</div>
+        </div>
+        <div class="mode-card" onclick="goToMode('custom')">
+          <div class="mode-card-badge">&#127775; Kustom</div>
+          <div class="mode-card-title">Custom Soal</div>
+          <div class="mode-card-desc">Pilih sendiri mata pelajaran, kategori, dan jumlah soal sesuai kebutuhan belajar kamu.</div>
+          <div class="mode-card-arrow">&#8594;</div>
+        </div>
+      </div>
+
+      <!-- Recent History (preview) -->
+      <div class="section-title">Pengerjaan Terakhir</div>
+      <div id="dashboard-history-list" class="history-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">&#128197;</div>
+          <div class="empty-state-title">Belum ada sesi</div>
+          <div class="empty-state-sub">Mulai mode latihan atau simulasi untuk melihat histori</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SIMULASI SETUP VIEW ── -->
+    <div class="view" id="view-simulasi-setup">
+      <div class="view-header" style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <button class="btn btn-ghost btn-sm" onclick="navigateTo('dashboard')">&#8592; Kembali</button>
+        <div>
+          <div class="view-title">Simulasi Penuh</div>
+          <div class="view-subtitle">Pilih paket & soal akan diacak otomatis</div>
+        </div>
+      </div>
+
+      <div class="simulasi-setup-card">
+        <div class="simulasi-setup-title">Pilih Paket Soal</div>
+        <div class="simulasi-setup-sub">Centang satu atau lebih paket. Semua soal dari paket yang dipilih akan digabung dan diacak.</div>
+        <div class="simulasi-pack-select" id="simulasi-pack-select">
+          <div class="empty-state" style="padding:20px;">
+            <div class="empty-state-sub">Belum ada paket soal</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="simulasi-setup-card">
+        <div class="simulasi-setup-title">Pengaturan Waktu</div>
+        <div class="simulasi-setup-sub">Durasi ujian dalam menit. Gunakan durasi dari paket atau atur sendiri.</div>
+        <div class="simulasi-duration-row">
+          <span class="simulasi-duration-label">&#9201; Durasi (menit)</span>
+          <input type="number" id="simulasi-duration" class="form-control"
+            style="width:90px;text-align:center;font-weight:700;" min="1" max="300" placeholder="90" value="90" />
+        </div>
+        <div class="simulasi-duration-row" style="margin-bottom:0;">
+          <span class="simulasi-duration-label">&#128221; Jumlah Soal</span>
+          <input type="number" id="simulasi-count" class="form-control"
+            style="width:90px;text-align:center;font-weight:700;" min="5" max="200" placeholder="40" value="40" />
+        </div>
+      </div>
+
+      <div style="text-align:center;margin-top:8px;">
+        <button class="btn btn-primary btn-lg" id="btn-start-simulasi" onclick="startSimulasi()">
+          &#9201; Mulai Simulasi
+        </button>
+        <div id="simulasi-info" style="font-size:.82rem;color:var(--neutral-400);margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- ── HISTORY VIEW ── -->
+    <div class="view" id="view-history">
+      <div class="view-header">
+        <div class="view-title">Histori Pengerjaan</div>
+        <div class="view-subtitle">Lihat perkembangan dan analisis performa kamu</div>
+      </div>
+
+      <!-- Score Chart -->
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div class="chart-card-title">Tren Skor</div>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--pink-400)"></div>Skor</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--pink-200)"></div>Rata-rata</div>
+          </div>
+        </div>
+        <div class="chart-wrapper" style="height:220px">
+          <canvas id="score-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Mode breakdown chart -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px;">
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div class="chart-card-title">Distribusi Mode</div>
+          </div>
+          <div class="chart-wrapper" style="height:180px;display:flex;align-items:center;justify-content:center;">
+            <canvas id="mode-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-header">
+            <div class="chart-card-title">Akurasi per Kategori</div>
+          </div>
+          <div class="chart-wrapper" style="height:180px;">
+            <canvas id="category-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter -->
+      <div class="history-controls">
+        <button class="filter-pill active" onclick="filterHistory('all', this)">Semua</button>
+        <button class="filter-pill" onclick="filterHistory('simulasi', this)">Simulasi</button>
+        <button class="filter-pill" onclick="filterHistory('latihan', this)">Latihan</button>
+        <button class="filter-pill" onclick="filterHistory('custom', this)">Custom</button>
+      </div>
+
+      <div id="full-history-list" class="history-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">&#128197;</div>
+          <div class="empty-state-title">Belum ada riwayat</div>
+          <div class="empty-state-sub">Sesi yang sudah selesai akan muncul di sini</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PACK PICKER VIEW ── -->
+    <div class="view" id="view-pack-picker">
+      <div class="view-header">
+        <button class="btn btn-ghost btn-sm" onclick="navigateTo('dashboard')" style="margin-bottom:10px;">
+          &#8592; Kembali
+        </button>
+        <div class="view-title" id="pack-picker-title">Pilih Paket Soal</div>
+        <div class="view-subtitle" id="pack-picker-sub">Pilih paket soal yang ingin dikerjakan</div>
+      </div>
+
+      <!-- Custom filters (only shown for custom mode) -->
+      <div class="custom-filters" id="custom-filters" style="display:none;">
+        <div class="custom-filter-title">Filter Soal</div>
+        <div class="form-row" style="margin-bottom:12px;">
+          <div class="form-group">
+            <label class="form-label">Mata Pelajaran</label>
+            <select class="form-control" id="filter-subject" onchange="updateCustomFilters()">
+              <option value="">Semua</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Kategori</label>
+            <select class="form-control" id="filter-category" onchange="updateCustomFilters()">
+              <option value="">Semua</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Jumlah Soal</label>
+            <select class="form-control" id="filter-count">
+              <option value="10">10 soal</option>
+              <option value="20" selected>20 soal</option>
+              <option value="30">30 soal</option>
+              <option value="50">50 soal</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="pack-picker-grid" id="pack-picker-grid">
+        <div class="empty-state">
+          <div class="empty-state-icon">&#128230;</div>
+          <div class="empty-state-title">Belum ada paket soal</div>
+          <div class="empty-state-sub">Admin belum menambahkan paket soal. Silakan hubungi admin.</div>
+        </div>
+      </div>
+
+      <div style="text-align:center;margin-top:20px;" id="pack-start-area" style="display:none;">
+        <button class="btn btn-primary btn-lg" id="btn-start-exam" onclick="startExam()" disabled>
+          Mulai Sekarang
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <button class="bottom-nav-btn active" id="bnav-dashboard" onclick="navigateTo('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Beranda
+    </button>
+    <button class="bottom-nav-btn" id="bnav-history" onclick="navigateTo('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Histori
+    </button>
+    <button class="bottom-nav-btn" id="bnav-logout" onclick="handleLogout()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Keluar
+    </button>
+  </nav>
+
+</div><!-- /app-page -->
+
+<!-- ================================================================
+     EXAM VIEW (full-screen, outside main layout)
+     ================================================================ -->
+<div id="exam-view">
+
+  <!-- Exam Top Bar -->
+  <div class="exam-topbar">
+    <button class="btn btn-ghost btn-sm" onclick="confirmExitExam()">&#10005; Keluar</button>
+    <div class="exam-topbar-title" id="exam-title">Simulasi Penuh</div>
+    <div class="exam-timer" id="exam-timer">00:00</div>
+  </div>
+  <div class="exam-progress-bar">
+    <div class="exam-progress-fill" id="exam-progress-fill" style="width:0%"></div>
+  </div>
+
+  <div class="exam-body">
+    <!-- Question Area -->
+    <div class="exam-question-area">
+      <div class="content-block-card" id="content-block-card" style="display:none;">
+        <div class="content-block-title" id="content-block-title">Teks Bacaan</div>
+        <div id="content-block-text"></div>
+      </div>
+
+      <div class="question-card">
+        <div class="question-number" id="question-number">Soal 1 / 20</div>
+        <div class="question-text" id="question-text"></div>
+        <div class="options-list" id="options-list"></div>
+        <div class="answer-feedback" id="answer-feedback">
+          <div class="feedback-label" id="feedback-label"></div>
+          <div id="feedback-text"></div>
+        </div>
+      </div>
+
+      <div class="exam-nav-btns">
+        <button class="btn btn-outline" id="btn-prev" onclick="prevQuestion()">&#8592; Sebelumnya</button>
+        <button class="btn btn-primary" id="btn-next" onclick="nextQuestion()">Selanjutnya &#8594;</button>
+        <button class="btn btn-primary" id="btn-finish" onclick="confirmFinishExam()" style="display:none;">
+          Selesai &#10003;
+        </button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="exam-sidebar">
+      <div class="card">
+        <div class="q-grid-title">Navigasi Soal</div>
+        <div class="q-grid" id="q-grid"></div>
+        <button class="btn btn-primary btn-block btn-sm" onclick="confirmFinishExam()" style="margin-top:4px;">
+          Selesai &amp; Kumpulkan
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /exam-view -->
+
+<!-- ================================================================
+     RESULT OVERLAY
+     ================================================================ -->
+<div class="result-overlay" id="result-overlay">
+  <div class="result-card">
+    <div class="result-icon" id="result-icon">&#127881;</div>
+    <div class="result-title" id="result-title">Sesi Selesai!</div>
+    <div class="result-score" id="result-score">0<span>/100</span></div>
+    <div class="result-stats">
+      <div class="result-stat">
+        <div class="result-stat-value" id="res-correct" style="color:var(--success)">0</div>
+        <div class="result-stat-label">Benar</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="res-wrong" style="color:var(--error)">0</div>
+        <div class="result-stat-label">Salah</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="res-unanswered" style="color:var(--neutral-400)">0</div>
+        <div class="result-stat-label">Tidak Dijawab</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="res-time">–</div>
+        <div class="result-stat-label">Waktu</div>
+      </div>
+    </div>
+    <div class="result-actions">
+      <button class="btn btn-outline" onclick="reviewSession()">Tinjau Jawaban</button>
+      <button class="btn btn-primary" onclick="closeResult()">Ke Beranda</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Konfirmasi</div>
+    <div class="modal-body" id="modal-body">Apakah kamu yakin?</div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Batal</button>
+      <button class="btn btn-primary" id="modal-confirm-btn">Ya, lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Messages Modal -->
+<div class="modal-overlay" id="messages-modal">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-title">Pesan dari Admin</div>
+    <div id="messages-list" style="max-height:340px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:10px;">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeMessagesModal()">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Camera Modal (photo request from admin) -->
+<div class="modal-overlay" id="camera-modal" style="z-index:9998;">
+  <div class="modal-box" style="max-width:400px;text-align:center;">
+    <div style="font-size:2.5rem;margin-bottom:8px;">📸</div>
+    <div class="modal-title" id="camera-modal-title">Admin minta foto kamu!</div>
+    <div class="modal-body" id="camera-modal-msg">Haii say, senyum dong!</div>
+
+    <!-- State: asking permission (first time only) -->
+    <div id="cam-state-ask">
+      <p style="font-size:.8rem;color:var(--neutral-400);margin-bottom:18px;">
+        Izinkan sekali, dan foto kamu akan otomatis terkirim setiap kali admin meminta. Kamu bisa cabut izin kapan saja dari pengaturan browser.
+      </p>
+      <div class="modal-actions" style="justify-content:center;gap:12px;">
+        <button class="btn btn-outline" onclick="declinePhoto()">Nggak ah 😅</button>
+        <button class="btn btn-primary" onclick="allowCameraForever()">📷 Izinkan</button>
+      </div>
+    </div>
+
+    <!-- State: capturing (shown briefly) -->
+    <div id="cam-state-capturing" style="display:none;padding:20px 0;">
+      <div style="font-size:1.5rem;margin-bottom:8px;">⏳</div>
+      <div style="font-size:.9rem;color:var(--neutral-500);">Mengambil foto...</div>
+      <canvas id="cam-canvas" style="display:none;"></canvas>
+      <video id="cam-video" autoplay playsinline muted style="display:none;"></video>
+    </div>
+
+    <!-- State: sent -->
+    <div id="cam-state-sent" style="display:none;padding:16px 0;">
+      <div style="font-size:2.5rem;margin-bottom:8px;">🎉</div>
+      <div style="font-weight:700;color:var(--pink-500);margin-bottom:6px;">Foto terkirim!</div>
+      <div style="font-size:.85rem;color:var(--neutral-400);">Semoga dia suka~ 😄</div>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="closeCameraModal()">Oke!</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
