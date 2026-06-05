@@ -77,6 +77,9 @@
     <div class="admin-nav-user">
       <span id="admin-nav-name">Admin</span>
       <span class="admin-nav-badge">ADMIN</span>
+      <button id="admin-dark-toggle" class="btn btn-ghost btn-sm"
+        style="color:rgba(255,255,255,.7);font-size:1.1rem;padding:4px 8px;"
+        onclick="toggleAdminDarkMode()" title="Ganti tema">🌙</button>
       <button class="btn btn-ghost btn-sm" style="color:rgba(255,255,255,.5);" onclick="handleAdminLogout()">Keluar</button>
     </div>
   </nav>
@@ -234,13 +237,16 @@
       <!-- ── MONITOR ── -->
       <div class="admin-view" id="aview-monitor">
         <div class="admin-view-title">Monitor Siswa</div>
-        <div class="admin-view-subtitle">Pantau aktivitas siswa secara real-time</div>
+        <div class="admin-view-subtitle">Pantau aktivitas, kirim pesan, hapus akun atau histori siswa</div>
 
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
           <button class="filter-pill active" onclick="filterUsers('all', this)">Semua</button>
           <button class="filter-pill" onclick="filterUsers('active', this)">Sedang Ujian</button>
           <button class="filter-pill" onclick="filterUsers('online', this)">Online</button>
           <button class="filter-pill" onclick="filterUsers('offline', this)">Offline</button>
+          <input id="user-search" class="form-control" type="text" placeholder="🔍 Cari nama / email..."
+            style="margin-left:auto;max-width:240px;padding:6px 12px;font-size:.85rem;"
+            oninput="filterUsersBySearch(this.value)" />
         </div>
 
         <div class="user-monitor-list" id="user-monitor-list">
@@ -376,10 +382,10 @@
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal-box">
     <div class="modal-title" id="modal-title">Konfirmasi</div>
-    <div class="modal-body"  id="modal-body">Apakah kamu yakin?</div>
+    <div class="modal-body"  id="modal-body" style="white-space:pre-line;">Apakah kamu yakin?</div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">Batal</button>
-      <button class="btn btn-danger"  id="modal-confirm-btn">Hapus</button>
+      <button class="btn btn-danger"  id="modal-confirm-btn">Ya, lanjutkan</button>
     </div>
   </div>
 </div>
