@@ -117,10 +117,14 @@ async function initAdminApp() {
   document.getElementById("admin-nav-name").textContent =
     adminUser._displayName.split(" ")[0];
 
-  await Promise.all([loadAllData()]);
+  await loadAllData();
   renderOverview();
-  listenUsers();
+  // listenUsers() will call populateRecipientSelect + populatePhotoRecipientSelect
+  // once the snapshot fires (or falls back). Also populate immediately with
+  // whatever loadAllData got, so the dropdowns aren't empty on first render.
   populateRecipientSelect();
+  populatePhotoRecipientSelect();
+  listenUsers();
   loadMessageLog();
 }
 
@@ -163,17 +167,46 @@ async function handleAdminLogout() {
 //  LOAD DATA
 // ============================================================
 async function loadAllData() {
+  // Load packs & sessions
   try {
-    const [usersSnap, packsSnap, sessionsSnap] = await Promise.all([
-      getDocs(query(collection(db, "users"), where("role", "==", "user"))),
-      getDocs(collection(db, "questionPacks")),
-      getDocs(query(collection(db, "sessions"), orderBy("completedAt", "desc"), limit(200)))
-    ]);
-    allUsers    = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    allPacks    = packsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    allSessions = sessionsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.status === "completed");
+    const packsSnap = await getDocs(collection(db, "questionPacks"));
+    allPacks = packsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) { console.error("Load packs:", e); }
+
+  try {
+    let sessionsSnap;
+    try {
+      sessionsSnap = await getDocs(query(collection(db, "sessions"), orderBy("completedAt", "desc"), limit(200)));
+    } catch (_) {
+      sessionsSnap = await getDocs(collection(db, "sessions"));
+    }
+    allSessions = sessionsSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(s => s.status === "completed")
+      .sort((a, b) => {
+        const ta = a.completedAt?.toDate ? a.completedAt.toDate() : new Date(a.completedAt || 0);
+        const tb = b.completedAt?.toDate ? b.completedAt.toDate() : new Date(b.completedAt || 0);
+        return tb - ta;
+      });
+  } catch (e) { console.error("Load sessions:", e); }
+
+  // Load users — try role-filtered query first, fall back to full collection
+  try {
+    const usersSnap = await getDocs(
+      query(collection(db, "users"), where("role", "==", "user"))
+    );
+    allUsers = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (e) {
-    console.error("Load data:", e);
+    console.warn("users role-filter query failed, trying full collection:", e.message);
+    try {
+      const usersSnap = await getDocs(collection(db, "users"));
+      allUsers = usersSnap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(u => u.role !== "admin" && u.id !== adminUser?.uid);
+    } catch (e2) {
+      console.error("Load users fallback failed:", e2);
+      allUsers = [];
+    }
   }
 }
 
@@ -417,21 +450,46 @@ function deletePack(packId, packTitle) {
 // ============================================================
 function listenUsers() {
   if (usersUnsub) usersUnsub();
+
+  // Try realtime listener with role filter; if it fails (rules), poll manually
+  let listenerFailed = false;
+
+  const q = query(collection(db, "users"), where("role", "==", "user"));
   usersUnsub = onSnapshot(
-    query(collection(db, "users"), where("role", "==", "user")),
+    q,
     snap => {
+      listenerFailed = false;
       allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderUserMonitor(allUsers);
-      document.getElementById("ov-total-users").textContent = allUsers.length;
-      const activeCount = allUsers.filter(u => {
-        if (!u.lastSeen) return false;
-        const d = u.lastSeen.toDate ? u.lastSeen.toDate() : new Date(u.lastSeen);
-        return (Date.now() - d.getTime()) < 2 * 60 * 1000;
-      }).length;
-      document.getElementById("ov-active-users").textContent = activeCount;
+      _onUsersUpdated();
     },
-    err => console.error("Users listener:", err)
+    async err => {
+      console.warn("Users snapshot failed (likely rules), falling back to polling:", err.message);
+      listenerFailed = true;
+      // One-time fallback load
+      try {
+        const fullSnap = await getDocs(collection(db, "users"));
+        allUsers = fullSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(u => u.role !== "admin" && u.id !== adminUser?.uid);
+        _onUsersUpdated();
+      } catch (e2) {
+        console.error("Users fallback poll also failed:", e2);
+      }
+    }
   );
+}
+
+function _onUsersUpdated() {
+  renderUserMonitor(allUsers);
+  populateRecipientSelect();
+  populatePhotoRecipientSelect();
+  document.getElementById("ov-total-users").textContent = allUsers.length;
+  const activeCount = allUsers.filter(u => {
+    if (!u.lastSeen) return false;
+    const d = u.lastSeen.toDate ? u.lastSeen.toDate() : new Date(u.lastSeen);
+    return (Date.now() - d.getTime()) < 2 * 60 * 1000;
+  }).length;
+  document.getElementById("ov-active-users").textContent = activeCount;
 }
 
 function filterUsers(filter, btn) {
