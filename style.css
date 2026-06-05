@@ -1446,3 +1446,83 @@ body.dark .simulasi-setup-card {
   gap: 6px;
   padding: 0 12px 10px;
 }
+/* ============================================================
+   ADMIN DARK MODE
+   ============================================================ */
+body.dark .admin-nav {
+  background: linear-gradient(135deg, #2a0e1a 0%, #1f1018 100%);
+}
+body.dark .admin-sidebar {
+  background: var(--neutral-100);
+  border-right-color: var(--neutral-200);
+}
+body.dark .admin-sidebar-item {
+  color: var(--neutral-500);
+}
+body.dark .admin-sidebar-item:hover,
+body.dark .admin-sidebar-item.active {
+  background: var(--pink-50);
+  color: var(--pink-400);
+}
+body.dark .admin-content {
+  background: var(--neutral-50);
+}
+body.dark .admin-stat-card {
+  background: var(--neutral-100);
+  border-color: var(--neutral-200);
+}
+body.dark .admin-view-title {
+  color: var(--neutral-700);
+}
+body.dark .admin-view-subtitle {
+  color: var(--neutral-400);
+}
+body.dark .user-monitor-card {
+  background: var(--neutral-100);
+  border-color: var(--neutral-200);
+}
+body.dark .user-monitor-name  { color: var(--neutral-700); }
+body.dark .user-monitor-email { color: var(--neutral-400); }
+body.dark .packs-table th {
+  background: var(--neutral-100);
+  color: var(--neutral-500);
+  border-bottom-color: var(--neutral-200);
+}
+body.dark .packs-table td {
+  border-bottom-color: var(--neutral-200);
+  color: var(--neutral-600);
+}
+body.dark .packs-table tr:hover td {
+  background: var(--neutral-100);
+}
+body.dark .upload-zone {
+  background: var(--neutral-100);
+  border-color: var(--neutral-200);
+}
+body.dark .pack-config-form {
+  background: var(--neutral-100);
+  border-color: var(--neutral-200);
+}
+body.dark .message-composer {
+  background: var(--neutral-100);
+  border-color: var(--neutral-200);
+}
+body.dark .quick-pick-btn {
+  background: var(--neutral-50);
+  border-color: var(--neutral-200);
+  color: var(--neutral-600);
+}
+body.dark .quick-pick-btn:hover {
+  background: var(--pink-50);
+  border-color: var(--pink-200);
+  color: var(--pink-400);
+}
+body.dark .photo-card {
+  background: var(--neutral-100);
+  border-color: var(--neutral-200);
+}
+body.dark .photo-card-name { color: var(--neutral-700); }
+body.dark .section-title    { color: var(--neutral-700); }
+body.dark #admin-auth-page  {
+  background: linear-gradient(135deg, #1f1018 0%, #1a1215 100%);
+}
